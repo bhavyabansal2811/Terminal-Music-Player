@@ -172,53 +172,92 @@ try {
     process.exit(1);
 }
 
+// ---------- UI HELPERS (simple box-drawing, no new logic) ----------
+const BOX_WIDTH = 60;
+
+function padLine(text) {
+    // Strips ANSI codes only for length calculation, keeps them in output
+    const visibleLength = text.replace(/\x1b\[[0-9;]*m/g, '').length;
+    const spaces = Math.max(0, BOX_WIDTH - visibleLength - 2);
+    return `│ ${text}${' '.repeat(spaces)}│`;
+}
+
+function divider(char = '─') {
+    return `├${char.repeat(BOX_WIDTH)}┤`;
+}
+
+function topBorder() {
+    return `┌${'─'.repeat(BOX_WIDTH)}┐`;
+}
+
+function bottomBorder() {
+    return `└${'─'.repeat(BOX_WIDTH)}┘`;
+}
+// ---------------------------------------------------------------
+
 function listSongs() {
     // Move cursor to top left and clear downwards (prevents flicker)
     process.stdout.write('\x1b[1;1H\x1b[0J');
-    
-    process.stdout.write('\x1b[36m--- CLI Music Player ---\x1b[0m\n\n');
+
+    const lines = [];
+
+    lines.push(topBorder());
+    lines.push(padLine('\x1b[36m🎵  TERMINAL MUSIC PLAYER\x1b[0m'));
+    lines.push(divider());
 
     songMenu.forEach((song, ind) => {
         if (ind === userChoice) {
-            process.stdout.write(`\x1b[32m> ${ind} : ${song}\x1b[0m\n`);
+            lines.push(padLine(`\x1b[32m▶ ${ind}. ${song}\x1b[0m`));
         } else {
-            process.stdout.write(`  ${ind} : ${song}\n`);
+            lines.push(padLine(`  ${ind}. ${song}`));
         }
-    })
+    });
 
-    process.stdout.write('\n');
-    
+    lines.push(divider());
+
     // Progress Bar
     const ratio = Math.min(1, Math.max(0, elapsedDuration / (totalDuration || 1)));
     const barLength = 40;
     const filledLength = Math.round(ratio * barLength);
-    const filledBars = '='.repeat(filledLength);
-    const emptyBars = '-'.repeat(barLength - filledLength);
-    
-    process.stdout.write(`\x1b[33m[${filledBars}${emptyBars}]\x1b[0m\n`);
-    
+    const filledBars = '█'.repeat(filledLength);
+    const emptyBars = '░'.repeat(barLength - filledLength);
+
+    lines.push(padLine(`\x1b[33m${filledBars}${emptyBars}\x1b[0m`));
+
     const formattedElapsed = Math.round(elapsedDuration);
     const formattedTotal = Math.round(totalDuration);
-    process.stdout.write(`Time: ${formattedElapsed}s / ${formattedTotal}s\n\n`);
-    
+    lines.push(padLine(`⏱  ${formattedElapsed}s / ${formattedTotal}s`));
+
+    lines.push(divider());
+
     // Status
-    process.stdout.write(`State: ${isPaused ? '\x1b[31mPaused\x1b[0m' : '\x1b[32mPlaying\x1b[0m'} | `);
-    process.stdout.write(`Speed (t): \x1b[35m${currentSpeed}x\x1b[0m | `);
-    process.stdout.write(`Shuffle (s): ${isShuffle ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'} | `);
-    process.stdout.write(`Repeat (r): ${isRepeat ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'}\n\n`);
-    
+    lines.push(padLine(
+        `${isPaused ? '\x1b[31m⏸ Paused\x1b[0m' : '\x1b[32m▶ Playing\x1b[0m'}   ` +
+        `Speed: \x1b[35m${currentSpeed}x\x1b[0m`
+    ));
+    lines.push(padLine(
+        `Shuffle: ${isShuffle ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'}   ` +
+        `Repeat: ${isRepeat ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'}`
+    ));
+
+    lines.push(divider());
+
     // History
-    process.stdout.write(`History: ${history.totalSongsPlayed} songs played, ${history.totalHoursPlayed.toFixed(4)} hours total.\n`);
+    lines.push(padLine(`📊 ${history.totalSongsPlayed} played · ${history.totalHoursPlayed.toFixed(2)}h total`));
     if (history.playHistory.length > 0) {
-        process.stdout.write(`Recently Played Order:\n`);
-        // Show up to the last 10 songs played
-        const recentHistory = history.playHistory.slice(-10);
+        lines.push(padLine('Recent:'));
+        const recentHistory = history.playHistory.slice(-5);
         recentHistory.forEach((item) => {
-            process.stdout.write(`${item.index}. ${item.name}\n`);
+            lines.push(padLine(`  ${item.index}. ${item.name}`));
         });
     }
-    
-    process.stdout.write(`\n[ $] \n`);
+
+    lines.push(divider());
+    lines.push(padLine('↑↓ select  ⏎ play  p pause  n/b next/back'));
+    lines.push(padLine('t speed  s shuffle  r repeat  ←→ seek'));
+    lines.push(bottomBorder());
+
+    process.stdout.write(lines.join('\n') + '\n');
 }
 
 function getTotalDuration(songPath) {
