@@ -11,6 +11,7 @@ let elapsedDuration = 0;
 let totalDuration = 0;
 
 let isShuffle = false;
+let isRepeat = false;
 
 const speeds = [1, 1.25, 1.5, 2];
 let speedIndex = 0;
@@ -71,6 +72,12 @@ process.stdin.on('data', (data) => {
     // s: Shuffle
     if (data[0] === 0x73) {
         isShuffle = !isShuffle;
+        listSongs();
+        return;
+    }
+    // r: Repeat
+    if (data[0] === 0x72) {
+        isRepeat = !isRepeat;
         listSongs();
         return;
     }
@@ -169,7 +176,8 @@ function listSongs() {
     // Status
     process.stdout.write(`State: ${isPaused ? '\x1b[31mPaused\x1b[0m' : '\x1b[32mPlaying\x1b[0m'} | `);
     process.stdout.write(`Speed (t): \x1b[35m${currentSpeed}x\x1b[0m | `);
-    process.stdout.write(`Shuffle (s): ${isShuffle ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'}\n\n`);
+    process.stdout.write(`Shuffle (s): ${isShuffle ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'} | `);
+    process.stdout.write(`Repeat (r): ${isRepeat ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'}\n\n`);
 
     process.stdout.write(`\n[ $] \n`);
 }
@@ -198,7 +206,11 @@ setInterval(() => {
         elapsedDuration += 0.5 * currentSpeed; // Update every 500ms scaled by speed
 
         if (totalDuration > 0 && elapsedDuration >= totalDuration) {
-            nextSong();
+            if (isRepeat) {
+                playCurrentSong();
+            } else {
+                nextSong();
+            }
         }
         listSongs();
     }
