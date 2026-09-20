@@ -1,6 +1,6 @@
 {
-  "totalSongsPlayed": 3,
-  "totalHoursPlayed": 0.007847222222222222,
+  "totalSongsPlayed": 8,
+  "totalHoursPlayed": 0.021180555555555557,
   "playHistory": [
     {
       "index": 2,
@@ -13,6 +13,26 @@
     {
       "index": 2,
       "name": "Ravi Kishan Song.mp3"
+    },
+    {
+      "index": 1,
+      "name": "Dragon Castle by Makai Symphony.mp3"
+    },
+    {
+      "index": 2,
+      "name": "Ravi Kishan Song.mp3"
+    },
+    {
+      "index": 1,
+      "name": "Dragon Castle by Makai Symphony.mp3"
+    },
+    {
+      "index": 1,
+      "name": "Dragon Castle by Makai Symphony.mp3"
+    },
+    {
+      "index": 1,
+      "name": "Dragon Castle by Makai Symphony.mp3"
     }
   ]
 }

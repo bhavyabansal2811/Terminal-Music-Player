@@ -17,6 +17,29 @@ const speeds = [1, 1.25, 1.5, 2];
 let speedIndex = 0;
 let currentSpeed = speeds[speedIndex];
 
+// History logic
+const historyFile = './history.json';
+let history = { totalSongsPlayed: 0, totalHoursPlayed: 0, playHistory: [] };
+if (fs.existsSync(historyFile)) {
+    try {
+        const parsedHistory = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+        history.totalSongsPlayed = parsedHistory.totalSongsPlayed || 0;
+        history.totalHoursPlayed = parsedHistory.totalHoursPlayed || 0;
+        history.playHistory = parsedHistory.playHistory || [];
+    } catch (e) {
+        // Ignore JSON parse errors
+    }
+}
+
+function saveHistory(durationSeconds) {
+    if (durationSeconds > 0) {
+        history.totalSongsPlayed += 1;
+        history.totalHoursPlayed += durationSeconds / 3600;
+        history.playHistory.push({ index: userChoice + 1, name: songMenu[userChoice] });
+        fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
+    }
+}
+
 function playCurrentSong(resumeFrom = 0) {
     if (playerProcess !== undefined) {
         playerProcess.kill("SIGINT");
@@ -24,19 +47,20 @@ function playCurrentSong(resumeFrom = 0) {
     elapsedDuration = resumeFrom;
     totalDuration = 0;
     getTotalDuration(`./songs/${songMenu[userChoice]}`);
-
+    
     const args = ["--intf", "rc", "--rate", String(currentSpeed)];
     if (resumeFrom > 0) {
         args.push("--start-time", String(Math.floor(resumeFrom)));
     }
     args.push(`./songs/${songMenu[userChoice]}`);
-
+    
     playerProcess = spawn('vlc', args);
     isPaused = false;
     listSongs();
 }
 
 function nextSong() {
+    saveHistory(elapsedDuration);
     if (isShuffle) {
         userChoice = Math.floor(Math.random() * songMenu.length);
     } else {
@@ -53,6 +77,7 @@ process.stdin.on('data', (data) => {
     }
     // b: Back
     if (data[0] === 0x62) {
+        saveHistory(elapsedDuration);
         userChoice -= 1;
         if (userChoice < 0) userChoice = songMenu.length - 1;
         playCurrentSong();
@@ -113,14 +138,17 @@ process.stdin.on('data', (data) => {
             }
         }
         if (data[0] === 0x03) { // Ctrl+C
+            saveHistory(elapsedDuration);
             process.exit(0);
         }
         return; // Don't fall through
     }
     if (data[0] === 0x03) { // Ctrl+C (fallback)
+        saveHistory(elapsedDuration);
         process.exit(0);
     }
     if (data[0] === 0x0d) { // Enter
+        saveHistory(elapsedDuration);
         playCurrentSong();
     }
     if (data[0] === 0x70) { // p: Play/Pause
@@ -147,7 +175,7 @@ try {
 function listSongs() {
     // Move cursor to top left and clear downwards (prevents flicker)
     process.stdout.write('\x1b[1;1H\x1b[0J');
-
+    
     process.stdout.write('\x1b[36m--- CLI Music Player ---\x1b[0m\n\n');
 
     songMenu.forEach((song, ind) => {
@@ -159,26 +187,37 @@ function listSongs() {
     })
 
     process.stdout.write('\n');
-
+    
     // Progress Bar
     const ratio = Math.min(1, Math.max(0, elapsedDuration / (totalDuration || 1)));
     const barLength = 40;
     const filledLength = Math.round(ratio * barLength);
     const filledBars = '='.repeat(filledLength);
     const emptyBars = '-'.repeat(barLength - filledLength);
-
+    
     process.stdout.write(`\x1b[33m[${filledBars}${emptyBars}]\x1b[0m\n`);
-
+    
     const formattedElapsed = Math.round(elapsedDuration);
     const formattedTotal = Math.round(totalDuration);
     process.stdout.write(`Time: ${formattedElapsed}s / ${formattedTotal}s\n\n`);
-
+    
     // Status
     process.stdout.write(`State: ${isPaused ? '\x1b[31mPaused\x1b[0m' : '\x1b[32mPlaying\x1b[0m'} | `);
     process.stdout.write(`Speed (t): \x1b[35m${currentSpeed}x\x1b[0m | `);
     process.stdout.write(`Shuffle (s): ${isShuffle ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'} | `);
     process.stdout.write(`Repeat (r): ${isRepeat ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'}\n\n`);
-
+    
+    // History
+    process.stdout.write(`History: ${history.totalSongsPlayed} songs played, ${history.totalHoursPlayed.toFixed(4)} hours total.\n`);
+    if (history.playHistory.length > 0) {
+        process.stdout.write(`Recently Played Order:\n`);
+        // Show up to the last 10 songs played
+        const recentHistory = history.playHistory.slice(-10);
+        recentHistory.forEach((item) => {
+            process.stdout.write(`${item.index}. ${item.name}\n`);
+        });
+    }
+    
     process.stdout.write(`\n[ $] \n`);
 }
 
@@ -204,9 +243,10 @@ listSongs();
 setInterval(() => {
     if (isPaused === false && playerProcess !== undefined) {
         elapsedDuration += 0.5 * currentSpeed; // Update every 500ms scaled by speed
-
+        
         if (totalDuration > 0 && elapsedDuration >= totalDuration) {
             if (isRepeat) {
+                saveHistory(elapsedDuration);
                 playCurrentSong();
             } else {
                 nextSong();
