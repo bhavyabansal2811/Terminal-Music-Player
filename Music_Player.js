@@ -10,6 +10,8 @@ let playerProcess = undefined
 let elapsedDuration = 0;
 let totalDuration = 0;
 
+let isShuffle = false;
+
 const speeds = [1, 1.25, 1.5, 2];
 let speedIndex = 0;
 let currentSpeed = speeds[speedIndex];
@@ -34,7 +36,11 @@ function playCurrentSong(resumeFrom = 0) {
 }
 
 function nextSong() {
-    userChoice = (userChoice + 1) % songMenu.length;
+    if (isShuffle) {
+        userChoice = Math.floor(Math.random() * songMenu.length);
+    } else {
+        userChoice = (userChoice + 1) % songMenu.length;
+    }
     playCurrentSong();
 }
 
@@ -60,6 +66,12 @@ process.stdin.on('data', (data) => {
         } else {
             listSongs();
         }
+        return;
+    }
+    // s: Shuffle
+    if (data[0] === 0x73) {
+        isShuffle = !isShuffle;
+        listSongs();
         return;
     }
 
@@ -156,7 +168,8 @@ function listSongs() {
 
     // Status
     process.stdout.write(`State: ${isPaused ? '\x1b[31mPaused\x1b[0m' : '\x1b[32mPlaying\x1b[0m'} | `);
-    process.stdout.write(`Speed (t): \x1b[35m${currentSpeed}x\x1b[0m\n\n`);
+    process.stdout.write(`Speed (t): \x1b[35m${currentSpeed}x\x1b[0m | `);
+    process.stdout.write(`Shuffle (s): ${isShuffle ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'}\n\n`);
 
     process.stdout.write(`\n[ $] \n`);
 }
