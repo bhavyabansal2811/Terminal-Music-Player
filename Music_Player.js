@@ -16,7 +16,25 @@ function playCurrentSong() {
     listSongs();
 }
 
+function nextSong() {
+    userChoice = (userChoice + 1) % songMenu.length;
+    playCurrentSong();
+}
+
 process.stdin.on('data', (data) => {
+    // n: Next
+    if (data[0] === 0x6e) {
+        nextSong();
+        return;
+    }
+    // b: Back
+    if (data[0] === 0x62) {
+        userChoice -= 1;
+        if (userChoice < 0) userChoice = songMenu.length - 1;
+        playCurrentSong();
+        return;
+    }
+
     if (data[0] === 0x1b) {
         if (data[1] === 0x5b) {
             if (data[2] === 0x41) { // Up Arrow
