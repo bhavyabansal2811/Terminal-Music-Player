@@ -10,6 +10,10 @@ let playerProcess = undefined
 let elapsedDuration = 0;
 let totalDuration = 0;
 
+const speeds = [1, 1.25, 1.5, 2];
+let speedIndex = 0;
+let currentSpeed = speeds[speedIndex];
+
 function playCurrentSong(resumeFrom = 0) {
     if (playerProcess !== undefined) {
         playerProcess.kill("SIGINT");
@@ -18,7 +22,7 @@ function playCurrentSong(resumeFrom = 0) {
     totalDuration = 0;
     getTotalDuration(`./songs/${songMenu[userChoice]}`);
 
-    const args = ["--intf", "rc"];
+    const args = ["--intf", "rc", "--rate", String(currentSpeed)];
     if (resumeFrom > 0) {
         args.push("--start-time", String(Math.floor(resumeFrom)));
     }
@@ -45,6 +49,17 @@ process.stdin.on('data', (data) => {
         userChoice -= 1;
         if (userChoice < 0) userChoice = songMenu.length - 1;
         playCurrentSong();
+        return;
+    }
+    // t: Toggle Speed
+    if (data[0] === 0x74) {
+        speedIndex = (speedIndex + 1) % speeds.length;
+        currentSpeed = speeds[speedIndex];
+        if (playerProcess) {
+            playCurrentSong(elapsedDuration);
+        } else {
+            listSongs();
+        }
         return;
     }
 
@@ -140,7 +155,8 @@ function listSongs() {
     process.stdout.write(`Time: ${formattedElapsed}s / ${formattedTotal}s\n\n`);
 
     // Status
-    process.stdout.write(`State: ${isPaused ? '\x1b[31mPaused\x1b[0m' : '\x1b[32mPlaying\x1b[0m'}\n\n`);
+    process.stdout.write(`State: ${isPaused ? '\x1b[31mPaused\x1b[0m' : '\x1b[32mPlaying\x1b[0m'} | `);
+    process.stdout.write(`Speed (t): \x1b[35m${currentSpeed}x\x1b[0m\n\n`);
 
     process.stdout.write(`\n[ $] \n`);
 }
@@ -166,7 +182,7 @@ listSongs();
 // Continuous update loop
 setInterval(() => {
     if (isPaused === false && playerProcess !== undefined) {
-        elapsedDuration += 0.5; // Update every 500ms
+        elapsedDuration += 0.5 * currentSpeed; // Update every 500ms scaled by speed
 
         if (totalDuration > 0 && elapsedDuration >= totalDuration) {
             nextSong();
