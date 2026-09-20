@@ -7,11 +7,24 @@ let userChoice = 0
 let isPaused = true
 let playerProcess = undefined
 
-function playCurrentSong() {
+let elapsedDuration = 0;
+let totalDuration = 0;
+
+function playCurrentSong(resumeFrom = 0) {
     if (playerProcess !== undefined) {
         playerProcess.kill("SIGINT");
     }
-    playerProcess = spawn('vlc', ["--intf", "rc", `./songs/${songMenu[userChoice]}`]);
+    elapsedDuration = resumeFrom;
+    totalDuration = 0;
+    getTotalDuration(`./songs/${songMenu[userChoice]}`);
+
+    const args = ["--intf", "rc"];
+    if (resumeFrom > 0) {
+        args.push("--start-time", String(Math.floor(resumeFrom)));
+    }
+    args.push(`./songs/${songMenu[userChoice]}`);
+
+    playerProcess = spawn('vlc', args);
     isPaused = false;
     listSongs();
 }
@@ -47,11 +60,30 @@ process.stdin.on('data', (data) => {
                     userChoice += 1;
                     listSongs();
                 }
+            } else if (data[2] === 0x43) { // Right Arrow (Seek Forward)
+                if (playerProcess) {
+                    playerProcess.stdin.write("seek +10\n");
+                    elapsedDuration += 10;
+                    if (totalDuration > 0 && elapsedDuration > totalDuration) {
+                        elapsedDuration = totalDuration;
+                    }
+                    listSongs();
+                }
+            } else if (data[2] === 0x44) { // Left Arrow (Seek Backward)
+                if (playerProcess) {
+                    playerProcess.stdin.write("seek -10\n");
+                    elapsedDuration -= 10;
+                    if (elapsedDuration < 0) elapsedDuration = 0;
+                    listSongs();
+                }
             }
         }
-        return;
+        if (data[0] === 0x03) { // Ctrl+C
+            process.exit(0);
+        }
+        return; // Don't fall through
     }
-    if (data[0] === 0x03) { // Ctrl+C
+    if (data[0] === 0x03) { // Ctrl+C (fallback)
         process.exit(0);
     }
     if (data[0] === 0x0d) { // Enter
@@ -94,10 +126,51 @@ function listSongs() {
 
     process.stdout.write('\n');
 
+    // Progress Bar
+    const ratio = Math.min(1, Math.max(0, elapsedDuration / (totalDuration || 1)));
+    const barLength = 40;
+    const filledLength = Math.round(ratio * barLength);
+    const filledBars = '='.repeat(filledLength);
+    const emptyBars = '-'.repeat(barLength - filledLength);
+
+    process.stdout.write(`\x1b[33m[${filledBars}${emptyBars}]\x1b[0m\n`);
+
+    const formattedElapsed = Math.round(elapsedDuration);
+    const formattedTotal = Math.round(totalDuration);
+    process.stdout.write(`Time: ${formattedElapsed}s / ${formattedTotal}s\n\n`);
+
     // Status
     process.stdout.write(`State: ${isPaused ? '\x1b[31mPaused\x1b[0m' : '\x1b[32mPlaying\x1b[0m'}\n\n`);
 
     process.stdout.write(`\n[ $] \n`);
 }
 
+function getTotalDuration(songPath) {
+    const afinfoProcess = spawn('afinfo', [songPath]);
+
+    afinfoProcess.stdout.on('data', (data) => {
+        const output = data.toString();
+        try {
+            totalDuration = Number(
+                output.split("estimated duration: ")[1].split(".")[0]
+            );
+            listSongs(); // Re-render to show total duration
+        } catch (e) {
+            totalDuration = 0; // fallback
+        }
+    });
+}
+
 listSongs();
+
+// Continuous update loop
+setInterval(() => {
+    if (isPaused === false && playerProcess !== undefined) {
+        elapsedDuration += 0.5; // Update every 500ms
+
+        if (totalDuration > 0 && elapsedDuration >= totalDuration) {
+            nextSong();
+        }
+        listSongs();
+    }
+}, 500);
